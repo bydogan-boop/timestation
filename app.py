@@ -6,7 +6,7 @@ from supabase import create_client
 
 # --- AYARLAR VE BAĞLANTI ---
 # st.set_page_config sayfanın en üstünde olmalı
-st.set_page_config(page_title="A-Gala Watch Tracker", page_icon="⌚", layout="wide")
+st.set_page_config(page_title="Timestation Watch Tracker", page_icon="⌚", layout="wide")
 
 # Supabase bağlantı bilgileri (Secrets kısmından çekilir)
 url = st.secrets["SUPABASE_URL"]
@@ -27,7 +27,7 @@ def is_stok_kodu_unique(code):
     return len(res.data) == 0
 
 # --- ARAYÜZ BAŞLIĞI ---
-st.title("⌚ A-Gala Envanter & Takip Sistemi")
+st.title("⌚ Timestation Takip Sistemi")
 
 # --- 1. BÖLÜM: YENİ SAAT KAYDI (GİRİŞ) ---
 with st.expander("🆕 Yeni Saat Kaydı Oluştur", expanded=False):
