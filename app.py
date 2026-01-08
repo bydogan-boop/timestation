@@ -121,9 +121,6 @@ def generate_french_pdf(saat, hareketler, toplam_maliyet):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- ARAYÜZ ---
-st.title("⌚ Timestation Takip Sistemi")
-
 # 1. BÖLÜM: KAYIT FORMU (Aynı kalıyor, hata yakalama eklendi)
 with st.expander("🆕 Yeni Saat Kaydı Oluştur"):
     with st.form("watch_entry_form", clear_on_submit=True):
