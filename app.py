@@ -200,7 +200,10 @@ res = supabase.table("watches").select("*").execute()
 if res.data:
     df = pd.DataFrame(res.data)
     options = {f"{row['stok_kodu']} - {row['brand_model']}": row['id'] for _, row in df.iterrows()}
-    sel_label = st.selectbox("İncelemek istediğiniz saati seçin", options.keys())
+    sel_label = st.selectbox(
+    "İncelemek istediğiniz saati seçin", 
+    options.keys(), 
+    key="watch_detail_selector")
     sel_id = options[sel_label]
     saat = next(item for item in res.data if item["id"] == sel_id)
 
