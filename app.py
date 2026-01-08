@@ -3,15 +3,19 @@ import requests
 import datetime
 import pandas as pd
 from supabase import create_client
+from fpdf import FPDF
 
 # --- AYARLAR VE BAĞLANTI ---
-# st.set_page_config sayfanın en üstünde olmalı
 st.set_page_config(page_title="Timestation Watch Tracker", page_icon="⌚", layout="wide")
 
-# Supabase bağlantı bilgileri (Secrets kısmından çekilir)
-url = st.secrets["SUPABASE_URL"]
-key = st.secrets["SUPABASE_KEY"]
-supabase = create_client(url, key)
+# Supabase bağlantısı
+try:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    supabase = create_client(url, key)
+except Exception as e:
+    st.error("Secrets dosyası veya Supabase bağlantı bilgileri hatalı!")
+    st.stop()
 
 # --- FONKSİYONLAR ---
 def get_exchange_rate(base_currency):
@@ -26,85 +30,106 @@ def is_stok_kodu_unique(code):
     res = supabase.table("watches").select("stok_kodu").eq("stok_kodu", code).execute()
     return len(res.data) == 0
 
-# --- ARAYÜZ BAŞLIĞI ---
+def generate_french_pdf(saat, hareketler, toplam_maliyet):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(190, 10, "FICHE DE SUIVI ET DOUANE", ln=True, align="C")
+    pdf.ln(10)
+    
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 10, "Details de la Montre", ln=True)
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(95, 8, f"Marque & Modele: {saat['brand_model']}")
+    pdf.cell(95, 8, f"Numero de serie: {saat['seri_no']}", ln=True)
+    pdf.cell(95, 8, f"Code Stock: {saat['stok_kodu']}")
+    pdf.cell(95, 8, f"Etat: {saat['condition']}", ln=True)
+    pdf.ln(5)
+
+    pdf.set_font("Arial", "B", 11)
+    pdf.cell(190, 10, "Historique des Frais", ln=True)
+    for h in hareketler:
+        pdf.set_font("Arial", "", 9)
+        pdf.cell(190, 7, f"- {h['date']} | {h['cost_type']}: {h['description']} ({h['amount_eur']} EUR)", ln=True)
+    
+    pdf.ln(5)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(190, 10, f"COUT TOTAL DE REVIENT: {toplam_maliyet:.2f} EUR", ln=True, align="R")
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- ARAYÜZ ---
 st.title("⌚ Timestation Takip Sistemi")
 
-# --- 1. BÖLÜM: YENİ SAAT KAYDI (GİRİŞ) ---
-with st.expander("🆕 Yeni Saat Kaydı Oluştur", expanded=False):
+# 1. BÖLÜM: KAYIT FORMU (Aynı kalıyor, hata yakalama eklendi)
+with st.expander("🆕 Yeni Saat Kaydı Oluştur"):
     with st.form("watch_entry_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            stok_kodu = st.text_input("Stok Kodu (Benzersiz)*").upper()
+            stok_kodu = st.text_input("Stok Kodu*").upper()
             marka_model = st.text_input("Marka & Model*")
-            seri_no = st.text_input("Seri Numarası")
-            condition = st.selectbox("Saat Kondisyonu", ["Parfait", "Bon", "Usé", "Épave"])
+            seri_no = st.text_input("Seri No")
+            condition = st.selectbox("Etat", ["Parfait", "Bon", "Usé", "Épave"])
         with col2:
-            alim_birimi = st.selectbox("Alım Döviz Birimi", ["JPY", "USD", "CHF", "EUR"])
-            alim_fiyati_original = st.number_input(f"Alış Fiyatı ({alim_birimi})", min_value=0.0)
-            tva_regime = st.selectbox("TVA Rejimi", ["Marge", "Standart"])
-            drive_id = st.text_input("Google Drive Klasör ID")
+            alim_birimi = st.selectbox("Devise", ["JPY", "USD", "CHF", "EUR"])
+            fiyat = st.number_input("Prix", min_value=0.0)
+            tva = st.selectbox("TVA", ["Marge", "Standart"])
+            drive = st.text_input("Google Drive ID")
 
-        st.write("**Aksesuar ve Belgeler**")
-        c1, c2, c3 = st.columns(3)
-        has_cert = c1.checkbox("Sertifika")
-        has_invoice = c2.checkbox("Alım Faturası")
-        has_box = c3.checkbox("Orijinal Kutu")
-
-        submit_button = st.form_submit_button("Saati Kaydet")
-
-        if submit_button:
-            if not stok_kodu or not marka_model:
-                st.error("Gerekli alanları doldurun!")
-            elif not is_stok_kodu_unique(stok_kodu):
-                st.error("Bu stok kodu zaten var!")
-            else:
-                rate = get_exchange_rate(alim_birimi)
-                if rate:
-                    buying_price_eur = alim_fiyati_original * rate
-                    data = {
-                        "stok_kodu": stok_kodu, "brand_model": marka_model, "seri_no": seri_no,
-                        "condition": condition, "has_certificate": has_cert, "has_invoice": has_invoice,
-                        "has_box": has_box, "buying_price_original": alim_fiyati_original,
-                        "currency": alim_birimi, "exchange_rate_to_eur": rate,
-                        "buying_price_eur": round(buying_price_eur, 2), "tva_regime": tva_regime,
-                        "drive_folder_id": drive_id, "status": "Buyee Warehouse"
-                    }
+        if st.form_submit_button("Saati Kaydet"):
+            rate = get_exchange_rate(alim_birimi)
+            if rate and is_stok_kodu_unique(stok_kodu):
+                data = {
+                    "stok_kodu": stok_kodu, "brand_model": marka_model, "seri_no": seri_no,
+                    "condition": condition, "buying_price_original": fiyat, "currency": alim_birimi,
+                    "exchange_rate_to_eur": rate, "buying_price_eur": round(fiyat * rate, 2),
+                    "tva_regime": tva, "drive_folder_id": drive
+                }
+                try:
                     supabase.table("watches").insert(data).execute()
-                    st.success("Saat envantere eklendi!")
+                    st.success("Kaydedildi!")
                     st.rerun()
+                except Exception as e:
+                    st.error(f"Veritabanı Hatası (RLS kontrol edin): {e}")
 
-# --- 2. BÖLÜM: HAREKET VE TAKİP (TIMELINE) ---
+# 2. BÖLÜM: DETAYLAR VE HAREKETLER
 st.divider()
-st.header("🚚 Hareket ve Masraf Yönetimi")
+res = supabase.table("watches").select("*").execute()
+if res.data:
+    df = pd.DataFrame(res.data)
+    options = {f"{row['stok_kodu']} - {row['brand_model']}": row['id'] for _, row in df.iterrows()}
+    sel_label = st.selectbox("İncelemek istediğiniz saati seçin", options.keys())
+    sel_id = options[sel_label]
+    saat = next(item for item in res.data if item["id"] == sel_id)
 
-saat_listesi = supabase.table("watches").select("id, stok_kodu, brand_model").execute()
-if saat_listesi.data:
-    options = {f"{s['stok_kodu']} - {s['brand_model']}": s['id'] for s in saat_listesi.data}
-    secili_saat_label = st.selectbox("Saat Seçiniz", options.keys())
-    secili_saat_id = options[secili_saat_label]
+    # Maliyet Hesaplama
+    h_res = supabase.table("watch_costs").select("*").eq("watch_id", sel_id).execute()
+    ek_masraf = sum(float(h['amount_eur']) for h in h_res.data)
+    toplam_maliyet = float(saat['buying_price_eur']) + ek_masraf
 
-    col_action, col_timeline = st.columns([1, 2])
+    c_det, c_form = st.columns([2, 1])
+    
+    with c_det:
+        st.subheader("📊 Finansal Özet")
+        st.metric("Toplam Maliyet (EUR)", f"{toplam_maliyet:.2f} €")
+        
+        # Fransızca PDF Butonu
+        pdf_data = generate_french_pdf(saat, h_res.data, toplam_maliyet)
+        st.download_button(f"📥 PDF Raporu Al (Fransızca)", data=pdf_data, file_name=f"Rapport_{saat['stok_kodu']}.pdf")
+        
+        # Zaman Çizelgesi
+        st.write("**İşlem Geçmişi:**")
+        for h in h_res.data:
+            st.caption(f"{h['date']} | {h['cost_type']}: {h['amount_eur']} € - {h['description']}")
 
-    with col_action:
-        st.subheader("📍 İşlem Ekle")
-        with st.form("movement_form"):
-            hareket_tipi = st.selectbox("İşlem Tipi", ["Logistique", "Douane", "Réparation", "Autre"])
-            tutar = st.number_input("Masraf Tutarı (€)", min_value=0.0)
-            aciklama = st.text_input("Açıklama")
-            yeni_durum = st.selectbox("Yeni Konum", ["Buyee Warehouse", "En Transit", "Douane France", "Atelier TR", "Atelier FR", "Stock France", "Vendu"])
-            
-            if st.form_submit_button("Güncelle"):
-                move_data = {"watch_id": secili_saat_id, "cost_type": hareket_tipi, "description": aciklama, "amount_eur": tutar, "date": str(datetime.date.today())}
-                supabase.table("watch_costs").insert(move_data).execute()
-                supabase.table("watches").update({"status": yeni_durum}).eq("id", secili_saat_id).execute()
-                st.success("Güncellendi!")
+    with c_form:
+        st.subheader("📍 Yeni İşlem")
+        with st.form("move"):
+            tip = st.selectbox("Tip", ["Logistique", "Douane", "Réparation", "Autre"])
+            tutar = st.number_input("Tutar (€)", min_value=0.0)
+            desc = st.text_input("Açıklama")
+            durum = st.selectbox("Konum", ["En Transit", "Douane France", "Stock France", "Vendu"])
+            if st.form_submit_button("Ekle"):
+                supabase.table("watch_costs").insert({"watch_id": sel_id, "cost_type": tip, "amount_eur": tutar, "description": desc, "date": str(datetime.date.today())}).execute()
+                supabase.table("watches").update({"status": durum}).eq("id", sel_id).execute()
                 st.rerun()
-
-    with col_timeline:
-        st.subheader("📜 Saat Geçmişi")
-        hareketler = supabase.table("watch_costs").select("*").eq("watch_id", secili_saat_id).order("date").execute()
-        if hareketler.data:
-            for h in hareketler.data:
-                st.info(f"**{h['date']}** | **{h['cost_type']}**: {h['description']} - **{h['amount_eur']} €**")
-        else:
-            st.write("Henüz hareket yok.")
