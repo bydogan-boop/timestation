@@ -1,12 +1,12 @@
-# --- ARAYÜZ ---
-st.title("⌚ Timestation Takip Sistemi")
-
 import streamlit as st
 import requests
 import datetime
 import pandas as pd
 from supabase import create_client
 from fpdf import FPDF
+
+# --- ARAYÜZ ---
+st.title("⌚ Timestation Takip Sistemi")
 
 # --- AYARLAR VE BAĞLANTI ---
 st.set_page_config(page_title="Timestation Watch Tracker", page_icon="⌚", layout="wide")
