@@ -175,7 +175,11 @@ if res.data:
         
         # Fransızca PDF Butonu
         pdf_data = generate_french_pdf(saat, h_res.data, toplam_maliyet)
-        st.download_button(f"📥 PDF Raporu Al (Fransızca)", data=pdf_data, file_name=f"Rapport_{saat['stok_kodu']}.pdf")
+        st.download_button(
+            label=f"📥 PDF Raporu Al (Fransızca)", 
+            data=pdf_data, 
+            file_name=f"Rapport_{saat['stok_kodu']}.pdf",
+            key=f"pdf_download_{saat['stok_kodu']}" )
         
         # Zaman Çizelgesi
         st.write("**İşlem Geçmişi:**")
