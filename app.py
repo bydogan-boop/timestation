@@ -173,7 +173,7 @@ if res.data:
 
     with c_form:
         st.subheader("📍 Yeni İşlem")
-        with st.form("move"):
+        with st.form(key=f"move_form_{saat['id']}"):
             tip = st.selectbox("Tip", ["Logistique", "Douane", "Réparation", "Autre"])
             tutar = st.number_input("Tutar (€)", min_value=0.0)
             desc = st.text_input("Açıklama")
